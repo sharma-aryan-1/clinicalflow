@@ -1,0 +1,24 @@
+# Data and build artifacts (never commit synthetic data dumps or the DB)
+data/raw/
+*.duckdb
+*.duckdb.wal
+output/
+
+# Synthea clone if it lives inside the repo
+synthea/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

@@ -18,7 +18,7 @@ through a Streamlit dashboard.
 Project is under active construction, built phase by phase:
 
 - [x] **Phase 0** — Project setup (scaffold, deps, Makefile, logging)
-- [ ] **Phase 1** — Data acquisition (Synthea generator, seed 1234, ~3000 patients)
+- [x] **Phase 1** — Data acquisition (Synthea generator, seed 1234, 3,450 patient bundles)
 - [ ] **Phase 2** — Ingestion (FHIR R4 → DuckDB)
 - [ ] **Phase 3** — Data governance & QA
 - [ ] **Phase 4** — Cardiovascular cohort & analysis
@@ -60,13 +60,28 @@ This repo ships a `Makefile` (Unix/WSL/git-bash) and an equivalent
 
 ## Data reproducibility
 
-Generated with Synthea using a fixed seed for reproducibility:
+Generated with [Synthea](https://github.com/synthetichealth/synthea) using a
+fixed seed. `make data` (or `.\make.ps1 data`) is fully automated: it shallow-
+clones Synthea into `synthea/` (gitignored), runs the generator, and copies the
+FHIR R4 bundles into `data/raw/`. It is idempotent — re-running is a no-op unless
+you pass `--force`.
 
-- Seed: `1234`
-- Population: `3000`
-- State: `Massachusetts`
+- **Seed:** `1234` (population seed and clinician seed both fixed)
+- **Population:** `3000` living (`-p 3000`)
+- **State:** `Massachusetts`
+- **Output:** `3,450` per-patient FHIR bundles (3,000 living + 450 who died
+  during the simulation), plus `hospitalInformation*` / `practitionerInformation*`
+  bundles (ingested by resource type; non-target resources are skipped).
+- **On-disk size:** ~14 GB raw JSON (gitignored — never committed).
 
-Details and the exact command are documented in Phase 1 (see Status above).
+Equivalent manual command (run inside the `synthea/` clone):
+
+```bash
+./run_synthea -p 3000 -s 1234 -cs 1234 Massachusetts
+```
+
+FHIR R4 export is on by default in current Synthea; bundles land in
+`synthea/output/fhir/`.
 
 ## Architecture
 

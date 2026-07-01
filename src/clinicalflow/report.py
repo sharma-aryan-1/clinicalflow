@@ -65,3 +65,102 @@ def write_quality_report(results: list[dict], path: Path | None = None) -> Path:
     path.write_text("\n".join(lines), encoding="utf-8")
     log.info("Wrote QA report -> %s", path)
     return path
+
+
+def _num(x, digits=1):
+    return "—" if x is None else f"{x:.{digits}f}"
+
+
+def write_cohort_report(m: dict, path: Path | None = None) -> Path:
+    """Render cohort analysis metrics to a short population-health brief."""
+    path = path or (REPORTS_DIR / "cohort_summary.md")
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    L: list[str] = []
+    L.append("# Cardiovascular Cohort Summary")
+    L.append("")
+    L.append("> Synthetic data (Synthea), no PHI. A population-health brief over "
+             "patients with one or more cardiovascular conditions.")
+    L.append("")
+    L.append(f"- Generated: {datetime.now():%Y-%m-%d %H:%M}")
+    L.append("")
+
+    # Overview
+    L.append("## Overview")
+    L.append("")
+    L.append(f"- **Total population:** {m['population']:,} patients")
+    L.append(f"- **Cardiovascular cohort:** {m['cohort_size']:,} patients "
+             f"(**{m['cohort_pct'] * 100:.1f}%** of the population)")
+    L.append(f"- **Mean age:** {_num(m['age_mean'])} years")
+    diab_n, diab_pct = m["diabetes"]
+    L.append(f"- **Diabetes within cohort:** {diab_n:,} ({diab_pct * 100:.1f}%)")
+    L.append("")
+
+    # Sex
+    L.append("### Sex distribution (cohort)")
+    L.append("")
+    L.append("| Sex | Patients | Share |")
+    L.append("|---|---:|---:|")
+    for gender, n in m["sex"]:
+        L.append(f"| {gender} | {n:,} | {n / m['cohort_size'] * 100:.1f}% |")
+    L.append("")
+
+    # Age
+    L.append("### Age distribution (cohort)")
+    L.append("")
+    L.append("| Age band | Patients | Share |")
+    L.append("|---|---:|---:|")
+    for label, n in m["age_buckets"]:
+        L.append(f"| {label} | {n:,} | {n / m['cohort_size'] * 100:.1f}% |")
+    L.append("")
+
+    # Prevalence
+    L.append("## Condition prevalence")
+    L.append("")
+    L.append("| Condition | Patients | % of cohort | % of population |")
+    L.append("|---|---:|---:|---:|")
+    for label, n, pct_c, pct_p in m["prevalence"]:
+        L.append(f"| {label} | {n:,} | {pct_c * 100:.1f}% | {pct_p * 100:.1f}% |")
+    L.append("")
+
+    # Comorbidity matrix
+    L.append("## Comorbidity co-occurrence")
+    L.append("")
+    L.append("Cell = patients having **both** the row and column condition "
+             "(diagonal = total with that condition).")
+    L.append("")
+    labels = m["comorbidity_labels"]
+    short = [lb.split("/")[0][:10] for lb in labels]
+    L.append("| | " + " | ".join(short) + " |")
+    L.append("|---|" + "---:|" * len(short))
+    for i, row_label in enumerate(labels):
+        cells = " | ".join(str(int(v)) for v in m["comorbidity_matrix"][i])
+        L.append(f"| **{row_label}** | {cells} |")
+    L.append("")
+
+    # Medications
+    L.append("## Medication patterns (cohort)")
+    L.append("")
+    L.append("| Drug class | Patients on ≥1 | % of cohort |")
+    L.append("|---|---:|---:|")
+    for cls, n, pct in m["med_classes"]:
+        L.append(f"| {cls} | {n:,} | {pct * 100:.1f}% |")
+    L.append("")
+
+    # Vitals & labs
+    bp, chol = m["bp"], m["chol"]
+    L.append("## Vitals & labs (latest per cohort patient)")
+    L.append("")
+    L.append(f"- **Blood pressure** (n={bp['n']:,}): "
+             f"systolic mean {_num(bp['sys_mean'])} / median {_num(bp['sys_median'])} mmHg; "
+             f"diastolic mean {_num(bp['dia_mean'])} / median {_num(bp['dia_median'])} mmHg.")
+    L.append(f"- **Population-health flag — latest BP ≥ 140/90:** "
+             f"**{bp['flag_count']:,}** patients ({bp['flag_pct'] * 100:.1f}% of those with a BP).")
+    L.append(f"- **Total cholesterol** (n={chol['n']:,}): "
+             f"mean {_num(chol['mean'])}, median {_num(chol['median'])}, "
+             f"IQR [{_num(chol['p25'])}, {_num(chol['p75'])}] mg/dL.")
+    L.append("")
+
+    path.write_text("\n".join(L), encoding="utf-8")
+    log.info("Wrote cohort summary -> %s", path)
+    return path

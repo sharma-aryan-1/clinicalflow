@@ -21,7 +21,7 @@ Project is under active construction, built phase by phase:
 - [x] **Phase 1** — Data acquisition (Synthea generator, seed 1234, 3,450 patient bundles)
 - [x] **Phase 2** — Ingestion (FHIR R4 → DuckDB: 3.4k patients, 2.7M observations)
 - [x] **Phase 3** — Data governance & QA (6 check families, 28 checks, error-budget contract)
-- [ ] **Phase 4** — Cardiovascular cohort & analysis
+- [x] **Phase 4** — Cardiovascular cohort & analysis (1,215 patients, 35.2% of pop)
 - [ ] **Phase 5** — Streamlit dashboard
 - [ ] **Phase 6** — Tests, README, polish
 

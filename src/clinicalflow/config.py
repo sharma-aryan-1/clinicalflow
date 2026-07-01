@@ -82,6 +82,14 @@ def get_logger(name: str = "clinicalflow") -> logging.Logger:
     if logger.handlers:
         return logger
     logger.setLevel(logging.INFO)
+    # Windows consoles default to cp1252; force UTF-8 so unicode in logs is safe.
+    import sys
+
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        except (AttributeError, ValueError):  # pragma: no cover
+            pass
     try:
         from rich.logging import RichHandler
 

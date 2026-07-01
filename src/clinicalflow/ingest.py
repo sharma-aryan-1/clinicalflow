@@ -44,6 +44,21 @@ def build_resolver(entries: list[dict]) -> dict[str, str]:
     return resolver
 
 
+def build_medication_index(entries: list[dict]) -> dict[str, tuple]:
+    """Map Medication resource id -> (rxnorm_code, display) for reference resolution.
+
+    Some MedicationRequests use `medicationReference` to a Medication resource in
+    the same bundle instead of an inline `medicationCodeableConcept`.
+    """
+    index: dict[str, tuple] = {}
+    for e in entries:
+        r = e.get("resource", {})
+        if r.get("resourceType") == "Medication":
+            _, code, display = get_coding(r.get("code"), SYSTEM_RXNORM)
+            index[r.get("id")] = (code, display)
+    return index
+
+
 def resolve_ref(ref, resolver: dict[str, str]) -> str | None:
     """Normalize a FHIR reference to a bare resource id."""
     if not ref:
@@ -122,7 +137,8 @@ def parse_patient(r: dict, buf: dict[str, list]) -> None:
     })
 
 
-def parse_encounter(r: dict, resolver, buf) -> None:
+def parse_encounter(r: dict, ctx, buf) -> None:
+    resolver = ctx["resolver"]
     enc_class = r.get("class", {})
     type_concept = (r.get("type") or [{}])[0]
     _, type_code, type_display = get_coding(type_concept)
@@ -141,7 +157,8 @@ def parse_encounter(r: dict, resolver, buf) -> None:
     })
 
 
-def parse_condition(r: dict, resolver, buf) -> None:
+def parse_condition(r: dict, ctx, buf) -> None:
+    resolver = ctx["resolver"]
     _, code, display = get_coding(r.get("code"), SYSTEM_SNOMED)
     _, status, _ = get_coding(r.get("clinicalStatus"))
     buf["conditions"].append({
@@ -155,7 +172,8 @@ def parse_condition(r: dict, resolver, buf) -> None:
     })
 
 
-def parse_observation(r: dict, resolver, buf) -> None:
+def parse_observation(r: dict, ctx, buf) -> None:
+    resolver = ctx["resolver"]
     patient_id = resolve_ref(r.get("subject"), resolver)
     encounter_id = resolve_ref(r.get("encounter"), resolver)
     _, category, _ = get_coding((r.get("category") or [{}])[0])
@@ -182,8 +200,11 @@ def parse_observation(r: dict, resolver, buf) -> None:
         for comp in components:
             _, loinc, display = get_coding(comp.get("code"), SYSTEM_LOINC)
             vq = comp.get("valueQuantity") or {}
+            vstr = comp.get("valueString")
+            if vstr is None and comp.get("valueCodeableConcept"):
+                _, _, vstr = get_coding(comp["valueCodeableConcept"])
             row(f"{oid}::{loinc}", loinc, display,
-                vq.get("value"), vq.get("unit"), comp.get("valueString"))
+                vq.get("value"), vq.get("unit"), vstr)
         return
 
     _, loinc, display = get_coding(r.get("code"), SYSTEM_LOINC)
@@ -199,8 +220,14 @@ def parse_observation(r: dict, resolver, buf) -> None:
         row(oid, loinc, display, None, None, None)
 
 
-def parse_medication(r: dict, resolver, buf) -> None:
-    _, code, display = get_coding(r.get("medicationCodeableConcept"), SYSTEM_RXNORM)
+def parse_medication(r: dict, ctx, buf) -> None:
+    resolver = ctx["resolver"]
+    if r.get("medicationCodeableConcept"):
+        _, code, display = get_coding(r.get("medicationCodeableConcept"), SYSTEM_RXNORM)
+    else:
+        # Resolve medicationReference -> Medication resource in the same bundle.
+        med_id = resolve_ref(r.get("medicationReference"), resolver)
+        code, display = ctx["meds"].get(med_id, (None, None))
     buf["medications"].append({
         "medication_id": r.get("id"),
         "patient_id": resolve_ref(r.get("subject"), resolver),
@@ -212,7 +239,8 @@ def parse_medication(r: dict, resolver, buf) -> None:
     })
 
 
-def parse_procedure(r: dict, resolver, buf) -> None:
+def parse_procedure(r: dict, ctx, buf) -> None:
+    resolver = ctx["resolver"]
     _, code, display = get_coding(r.get("code"), SYSTEM_SNOMED)
     buf["procedures"].append({
         "procedure_id": r.get("id"),
@@ -303,12 +331,15 @@ def main() -> None:
             log.warning("Skipping unreadable bundle %s: %s", path.name, exc)
             continue
         entries = bundle.get("entry", []) or []
-        resolver = build_resolver(entries)
+        ctx = {
+            "resolver": build_resolver(entries),
+            "meds": build_medication_index(entries),
+        }
         for entry in entries:
             resource = entry.get("resource", {})
             handler = DISPATCH.get(resource.get("resourceType"))
             if handler:
-                handler(resource, resolver, buffers)
+                handler(resource, ctx, buffers)
         if i % BATCH_SIZE == 0:
             flush(con, buffers)
             log.info("  ... processed %d/%d bundles", i, len(bundles))

@@ -9,7 +9,7 @@ else
 	PY ?= .venv/bin/python
 endif
 
-.PHONY: setup data ingest qa cohort dashboard test all clean help
+.PHONY: setup data ingest qa cohort dashboard slim test all clean help
 
 help:
 	@echo "ClinicalFlow targets:"
@@ -19,6 +19,7 @@ help:
 	@echo "  qa         run data-quality checks, write report"
 	@echo "  cohort     build cardiovascular cohort, write summary"
 	@echo "  dashboard  launch the Streamlit dashboard"
+	@echo "  slim       build the small committed demo DB for hosting"
 	@echo "  test       run pytest"
 	@echo "  all        ingest -> qa -> cohort (regenerates reports)"
 
@@ -41,6 +42,9 @@ cohort:
 
 dashboard:
 	$(PY) -m streamlit run app/dashboard.py
+
+slim:
+	$(PY) -m clinicalflow.slim
 
 test:
 	$(PY) -m pytest

@@ -15,6 +15,16 @@ database, a data-quality report, and a cohort summary with a single command.
 
 ---
 
+## ▶️ Live demo
+
+**[Open the live dashboard](https://YOUR-APP.streamlit.app)** — no install required.
+Hosted on Streamlit Community Cloud and backed by a small committed "slim"
+database, so a recruiter can explore the pipeline, data-quality checks, and
+cardiovascular cohort interactively in the browser. *(Replace the URL above with
+your deployed app link — see [Deployment](#deployment).)*
+
+![Pipeline](docs/pipeline.png)
+
 ## What this build contains
 
 | | |
@@ -161,15 +171,39 @@ population-health flag for patients with a latest BP ≥ 140/90.
 
 ## Dashboard
 
-`streamlit run app/dashboard.py` (or `make dashboard`). Six sections, all reading
-read-only from DuckDB with cached queries: **Overview**, **Condition prevalence**,
-**Comorbidities** (heatmap), **Medications**, **Vitals & labs** (distributions),
-and **Data quality** (the pass/fail governance table).
+`streamlit run app/dashboard.py` (or `make dashboard`). Seven sections, all reading
+read-only from DuckDB with cached queries: **Overview**, **Pipeline** (the
+FHIR→DuckDB→QA→cohort flow, ingest scale, and cohort funnel), **Condition
+prevalence**, **Comorbidities** (heatmap), **Medications**, **Vitals & labs**
+(distributions), and **Data quality** (the pass/fail governance table). It uses
+the full local DB when present and automatically falls back to the committed slim
+demo DB otherwise (so the hosted app works without the 160 MB database).
 
-<!-- Screenshots: drop PNGs into docs/ and reference them here, e.g.:
-![Overview](docs/overview.png)
-![Data quality](docs/data_quality.png)
--->
+| Overview | Data quality |
+|---|---|
+| ![Overview](docs/overview.png) | ![Data quality](docs/data_quality.png) |
+| **Comorbidities** | **Vitals & labs** |
+| ![Comorbidities](docs/comorbidities.png) | ![Vitals & labs](docs/vitals_labs.png) |
+
+Screenshots are regenerated with `python scripts/capture_screenshots.py` against a
+running server (requires `pip install playwright && playwright install chromium`).
+
+---
+
+## Deployment
+
+The app is deploy-ready for **Streamlit Community Cloud** (free):
+
+1. Push this repo to GitHub (must be **public** for the free tier).
+2. Go to [share.streamlit.io](https://share.streamlit.io) → **New app**.
+3. Pick this repo, branch `main`, main file `app/dashboard.py`.
+4. Deploy. Streamlit installs `requirements.txt`; the app imports the package via a
+   `src/` path shim (no editable install needed) and reads the committed
+   `data/clinicalflow_slim.duckdb`.
+
+Rebuild the slim demo DB after a fresh pipeline run with `make slim`
+(`.\make.ps1 slim`) — it extracts only cohort-relevant rows plus a
+`pipeline_stats` table carrying the true full-scale counts.
 
 ---
 

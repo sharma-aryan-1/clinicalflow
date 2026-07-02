@@ -7,15 +7,34 @@ Run:  streamlit run app/dashboard.py   (or `make dashboard` / `.\\make.ps1 dashb
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Make the package importable without an editable install (e.g. on Streamlit Cloud).
+_SRC = Path(__file__).resolve().parents[1] / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
 import duckdb
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from clinicalflow import cohort
-from clinicalflow.config import BP_FLAG_DIASTOLIC, BP_FLAG_SYSTOLIC, DB_PATH
+from clinicalflow.config import BP_FLAG_DIASTOLIC, BP_FLAG_SYSTOLIC, DATA_DIR, DB_PATH
 
 st.set_page_config(page_title="ClinicalFlow", page_icon="🫀", layout="wide")
+
+SLIM_PATH = DATA_DIR / "clinicalflow_slim.duckdb"
+
+
+def resolve_db() -> Path | None:
+    """Prefer the full local DB; fall back to the committed slim demo DB."""
+    if DB_PATH.exists():
+        return DB_PATH
+    if SLIM_PATH.exists():
+        return SLIM_PATH
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -23,9 +42,30 @@ st.set_page_config(page_title="ClinicalFlow", page_icon="🫀", layout="wide")
 # --------------------------------------------------------------------------- #
 @st.cache_resource
 def get_con():
-    if not DB_PATH.exists():
+    db = resolve_db()
+    if db is None:
         return None
-    return duckdb.connect(str(DB_PATH), read_only=True)
+    return duckdb.connect(str(db), read_only=True)
+
+
+@st.cache_data(show_spinner=False)
+def pipeline_stats_df() -> pd.DataFrame:
+    """Full-scale per-table row counts (from pipeline_stats if present, else live)."""
+    con = get_con()
+    try:
+        return con.execute(
+            "SELECT table_name, row_count FROM pipeline_stats ORDER BY row_count DESC"
+        ).fetch_df()
+    except (duckdb.CatalogException, duckdb.Error):
+        tables = ["patients", "encounters", "conditions", "observations",
+                  "medications", "procedures"]
+        rows = []
+        for t in tables:
+            try:
+                rows.append((t, con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]))
+            except duckdb.Error:
+                pass
+        return pd.DataFrame(rows, columns=["table_name", "row_count"])
 
 
 @st.cache_data(show_spinner=False)
@@ -71,8 +111,9 @@ st.caption(
 
 if con is None:
     st.error(
-        f"Database not found at `{DB_PATH}`.\n\n"
-        "Run the pipeline first:  `make all`  (or `.\\make.ps1 all`)."
+        "Database not found.\n\n"
+        "Run the pipeline first: `make all` (builds the full DB), or "
+        "`python -m clinicalflow.slim` to build the committed demo DB."
     )
     st.stop()
 
@@ -80,12 +121,14 @@ m = get_metrics()
 
 section = st.sidebar.radio(
     "Section",
-    ["Overview", "Condition prevalence", "Comorbidities", "Medications",
-     "Vitals & labs", "Data quality"],
+    ["Overview", "Pipeline", "Condition prevalence", "Comorbidities",
+     "Medications", "Vitals & labs", "Data quality"],
 )
 st.sidebar.markdown("---")
 st.sidebar.metric("Total patients", f"{m['population']:,}")
 st.sidebar.metric("CV cohort", f"{m['cohort_size']:,}", f"{m['cohort_pct'] * 100:.1f}% of pop")
+if resolve_db() == SLIM_PATH:
+    st.sidebar.caption("📦 Demo mode — running on the slim committed database.")
 
 
 # --------------------------------------------------------------------------- #
@@ -119,7 +162,84 @@ if section == "Overview":
 
 
 # --------------------------------------------------------------------------- #
-# 2. Condition prevalence
+# 2. Pipeline (ingest → quality → cohort, visualized)
+# --------------------------------------------------------------------------- #
+elif section == "Pipeline":
+    st.header("Pipeline — FHIR → DuckDB → QA → Cohort")
+    st.caption("How raw synthetic FHIR bundles become the analysis below.")
+
+    # Flow as a row of cards.
+    steps = [
+        ("📁 FHIR R4 bundles", "3,450 synthetic patients\n(Synthea, seed 1234)"),
+        ("⚙️ Ingest", "resolve refs · split BP\ncomponents · 6 tables"),
+        ("🗄️ DuckDB", "normalized SQL store"),
+        ("✅ Quality", "28 checks · error budget"),
+        ("🫀 Cohort", "cardiovascular\npopulation-health"),
+    ]
+    cols = st.columns(len(steps) * 2 - 1)
+    for i, (title, body) in enumerate(steps):
+        with cols[i * 2]:
+            st.markdown(f"**{title}**")
+            st.caption(body)
+        if i < len(steps) - 1:
+            cols[i * 2 + 1].markdown(
+                "<div style='text-align:center;font-size:1.6rem;padding-top:6px'>→</div>",
+                unsafe_allow_html=True,
+            )
+
+    st.divider()
+
+    # Ingest scale — real full-DB row counts.
+    st.subheader("① Ingest — normalized tables & scale")
+    stats = pipeline_stats_df()
+    total_rows = int(stats["row_count"].sum())
+    obs_rows = int(stats.loc[stats.table_name == "observations", "row_count"].iloc[0])
+    c = st.columns(4)
+    c[0].metric("FHIR resource types", "6")
+    c[1].metric("DuckDB tables", f"{len(stats)}")
+    c[2].metric("Total rows ingested", f"{total_rows:,}")
+    c[3].metric("Observations", f"{obs_rows:,}")
+    fig = px.bar(stats, x="row_count", y="table_name", orientation="h", text="row_count",
+                 log_x=True, title="Rows per table (log scale)")
+    fig.update_layout(margin=dict(t=40), xaxis_title="rows (log)", yaxis_title="")
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.divider()
+
+    # Quality summary.
+    st.subheader("② Quality — data governance contract")
+    q = qa_df()
+    passed = int((q["status"] == "pass").sum())
+    failed = int((q["status"] == "fail").sum())
+    c = st.columns(3)
+    c[0].metric("Checks", f"{len(q)}")
+    c[1].metric("Passed", f"{passed}")
+    c[2].metric("Failed", f"{failed}", delta_color="inverse")
+    fam = (q.assign(pass_=(q["status"] == "pass"))
+             .groupby("check_name")
+             .agg(checks=("status", "size"), passed=("pass_", "sum"))
+             .reset_index().rename(columns={"check_name": "check family"}))
+    st.dataframe(fam, hide_index=True, use_container_width=True)
+    st.caption("A check fails when violations exceed a 1% error budget (configurable). "
+               "See the **Data quality** section for the full table.")
+
+    st.divider()
+
+    # Cohort funnel.
+    st.subheader("③ Cohort — from population to cardiovascular cohort")
+    funnel = pd.DataFrame({
+        "stage": ["Total population", "Cardiovascular cohort"],
+        "patients": [m["population"], m["cohort_size"]],
+    })
+    fig = px.funnel(funnel, x="patients", y="stage")
+    fig.update_layout(margin=dict(t=10), yaxis_title="")
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption(f"{m['cohort_size']:,} of {m['population']:,} patients "
+               f"({m['cohort_pct'] * 100:.1f}%) have ≥1 cardiovascular condition.")
+
+
+# --------------------------------------------------------------------------- #
+# 3. Condition prevalence
 # --------------------------------------------------------------------------- #
 elif section == "Condition prevalence":
     st.header("Cardiovascular condition prevalence")

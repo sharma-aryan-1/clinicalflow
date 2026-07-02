@@ -22,6 +22,7 @@ switch ($Target) {
     "qa"        { & $PY -m clinicalflow.pipeline qa }
     "cohort"    { & $PY -m clinicalflow.pipeline cohort }
     "dashboard" { & $PY -m streamlit run app/dashboard.py }
+    "slim"      { & $PY -m clinicalflow.slim }
     "test"      { & $PY -m pytest }
     "all"       { & $PY -m clinicalflow.pipeline all }
     "clean"     { Get-ChildItem -Path "data" -Filter "*.duckdb*" -ErrorAction SilentlyContinue | Remove-Item -Force }
@@ -33,6 +34,7 @@ switch ($Target) {
         Write-Host "  qa         run data-quality checks, write report"
         Write-Host "  cohort     build cardiovascular cohort, write summary"
         Write-Host "  dashboard  launch the Streamlit dashboard"
+        Write-Host "  slim       build the small committed demo DB for hosting"
         Write-Host "  test       run pytest"
         Write-Host "  all        ingest -> qa -> cohort (regenerates reports)"
     }

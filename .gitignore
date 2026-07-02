@@ -3,6 +3,8 @@ data/raw/
 *.duckdb
 *.duckdb.wal
 output/
+# ...except the small slim DB that powers the hosted demo.
+!data/clinicalflow_slim.duckdb
 
 # Synthea clone if it lives inside the repo
 synthea/

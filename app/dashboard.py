@@ -357,7 +357,8 @@ elif section == "Data quality":
     ]
 
     def _hl(row):
-        color = "#e6ffed" if row["status"] == "pass" else "#ffe6e6"
-        return [f"background-color: {color}"] * len(row)
+        # Set both background and text color so it's readable in dark and light themes.
+        bg, fg = ("#e6ffed", "#0b3d1f") if row["status"] == "pass" else ("#ffe6e6", "#7a1020")
+        return [f"background-color: {bg}; color: {fg}"] * len(row)
 
     st.dataframe(show.style.apply(_hl, axis=1), hide_index=True, use_container_width=True)

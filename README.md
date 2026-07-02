@@ -17,11 +17,17 @@ database, a data-quality report, and a cohort summary with a single command.
 
 ## ▶️ Live demo
 
-**[Open the live dashboard](https://YOUR-APP.streamlit.app)** — no install required.
+### **[▶ Open the live dashboard](https://clinicalflow-fhir-showcase.streamlit.app/)** — no install required.
+
 Hosted on Streamlit Community Cloud and backed by a small committed "slim"
-database, so a recruiter can explore the pipeline, data-quality checks, and
-cardiovascular cohort interactively in the browser. *(Replace the URL above with
-your deployed app link — see [Deployment](#deployment).)*
+database, so anyone can explore the pipeline, data-quality checks, and
+cardiovascular cohort interactively in the browser.
+
+The full pipeline runs end to end with one command (`make all`):
+
+![pipeline run](docs/pipeline_run.gif)
+
+The dashboard's **Pipeline** page turns that same flow into an interactive view:
 
 ![Pipeline](docs/pipeline.png)
 
@@ -186,7 +192,8 @@ demo DB otherwise (so the hosted app works without the 160 MB database).
 | ![Comorbidities](docs/comorbidities.png) | ![Vitals & labs](docs/vitals_labs.png) |
 
 Screenshots are regenerated with `python scripts/capture_screenshots.py` against a
-running server (requires `pip install playwright && playwright install chromium`).
+running server (requires `pip install playwright && playwright install chromium`);
+the terminal GIF with `python scripts/make_terminal_gif.py`.
 
 ---
 

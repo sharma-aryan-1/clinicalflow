@@ -8,7 +8,6 @@ is tracked as a comorbidity/risk factor rather than a defining condition.
 from __future__ import annotations
 
 import duckdb
-import pandas as pd
 
 from .config import BP_FLAG_DIASTOLIC, BP_FLAG_SYSTOLIC, DB_PATH, get_logger
 from .report import write_cohort_report

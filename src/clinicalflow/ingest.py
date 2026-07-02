@@ -12,7 +12,6 @@ Re-running is idempotent: tables are dropped and recreated each run.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import duckdb
 import pandas as pd
@@ -309,6 +308,29 @@ def create_tables(con) -> None:
         con.execute(ddl)
 
 
+def process_bundle(bundle: dict, buffers: dict[str, list]) -> None:
+    """Parse one FHIR bundle dict into the per-table row buffers."""
+    entries = bundle.get("entry", []) or []
+    ctx = {
+        "resolver": build_resolver(entries),
+        "meds": build_medication_index(entries),
+    }
+    for entry in entries:
+        resource = entry.get("resource", {})
+        handler = DISPATCH.get(resource.get("resourceType"))
+        if handler:
+            handler(resource, ctx, buffers)
+
+
+def ingest_bundles(con, bundles: list[dict]) -> None:
+    """Create tables and load an in-memory list of bundle dicts (used by tests)."""
+    create_tables(con)
+    buffers: dict[str, list] = {t: [] for t in schema.TABLES}
+    for bundle in bundles:
+        process_bundle(bundle, buffers)
+    flush(con, buffers)
+
+
 def main() -> None:
     bundles = [
         p for p in sorted(RAW_DIR.glob("*.json"))
@@ -330,16 +352,7 @@ def main() -> None:
         except (json.JSONDecodeError, OSError) as exc:
             log.warning("Skipping unreadable bundle %s: %s", path.name, exc)
             continue
-        entries = bundle.get("entry", []) or []
-        ctx = {
-            "resolver": build_resolver(entries),
-            "meds": build_medication_index(entries),
-        }
-        for entry in entries:
-            resource = entry.get("resource", {})
-            handler = DISPATCH.get(resource.get("resourceType"))
-            if handler:
-                handler(resource, ctx, buffers)
+        process_bundle(bundle, buffers)
         if i % BATCH_SIZE == 0:
             flush(con, buffers)
             log.info("  ... processed %d/%d bundles", i, len(bundles))

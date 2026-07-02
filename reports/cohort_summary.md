@@ -2,7 +2,7 @@
 
 > Synthetic data (Synthea), no PHI. A population-health brief over patients with one or more cardiovascular conditions.
 
-- Generated: 2026-07-01 16:27
+- Generated: 2026-07-02 13:10
 
 ## Overview
 
@@ -65,4 +65,4 @@ Cell = patients having **both** the row and column condition (diagonal = total w
 
 - **Blood pressure** (n=1,215): systolic mean 115.4 / median 115.0 mmHg; diastolic mean 77.1 / median 77.0 mmHg.
 - **Population-health flag — latest BP ≥ 140/90:** **266** patients (21.9% of those with a BP).
-- **Total cholesterol** (n=1,203): mean 186.9, median 179.5, IQR [157.7, 206.5] mg/dL.
+- **Total cholesterol** (n=1,203): mean 187.1, median 179.5, IQR [157.8, 206.6] mg/dL.

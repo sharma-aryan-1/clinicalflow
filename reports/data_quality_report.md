@@ -2,7 +2,7 @@
 
 > Synthetic data (Synthea), no PHI. This report applies an **error-budget contract**: a check fails when violations exceed **1%** of the rows it inspects.
 
-- Generated: 2026-07-01 15:53
+- Generated: 2026-07-02 13:10
 - Checks run: **28**
 - Overall: **PASS ✅**
 
